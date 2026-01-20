@@ -888,7 +888,7 @@ ifeq ($(gcn_tools_llvm_version),tools)
   ifneq (,$(filter $(distrelease), bookworm trixie xenial bionic focal jammy noble oracular plucky questing))
     AMDGCN_TOOLS_DEP = amdgcn-tools-19 [$(gcn_archs)],
   else
-    AMDGCN_TOOLS_DEP = amdgcn-tools-21 [$(gcn_archs)],
+    AMDGCN_TOOLS_DEP = amdgcn-tools-19 [$(gcn_archs)],
   endif
 else
   AMDGCN_TOOLS_DEP = llvm-$(gcn_tools_llvm_version)$(if $(pkg_llvm_ver), (>= $(pkg_llvm_ver))) [$(gcn_archs)], \
