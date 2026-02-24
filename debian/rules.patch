@@ -73,6 +73,15 @@ debian_patches += \
 	gcc-riscv-extensions \
 	libphobos-ppc64el \
 
+# riscv profile support
+debian_patches += \
+	riscv-imply-c-to-zca \
+	riscv-imply-zicsr-to-zve32x \
+	riscv-rva20-rva22 \
+	riscv-rva23 \
+	riscv-rva23s \
+	riscv-rva23-update
+
 # see https://bugs.debian.org/1108322
 ifneq (,$(filter $(DEB_TARGET_ARCH),hppa m68k powerpc))
   debian_patches += ada-tv_nsec-size

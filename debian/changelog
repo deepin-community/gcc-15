@@ -1,3 +1,9 @@
+gcc-15 (15.2.0-12deepin2) unstable; urgency=medium
+
+  * add rva23 profile support
+
+ -- Chang Yang <yangchang@deepin.org>  Tue, 24 Feb 2026 12:48:03 +0800
+
 gcc-15 (15.2.0-12deepin1) unstable; urgency=medium
 
   * enable pie for deepin/uos

@@ -1,0 +1,80 @@
+diff --git a/gcc/common/config/riscv/riscv-common.cc b/gcc/common/config/riscv/riscv-common.cc
+index 15df22d537704..145a0f2bd95f9 100644
+--- a/src/gcc/common/config/riscv/riscv-common.cc
++++ b/src/gcc/common/config/riscv/riscv-common.cc
+@@ -137,6 +137,7 @@ static const riscv_implied_info_t riscv_implied_info[] =
+   {"zve64f", "f"},
+   {"zve64d", "d"},
+ 
++  {"zve32x", "zicsr"},
+   {"zve32x", "zvl32b"},
+   {"zve32f", "zve32x"},
+   {"zve32f", "zvl32b"},
+diff --git a/gcc/testsuite/gcc.target/riscv/predef-19.c b/gcc/testsuite/gcc.target/riscv/predef-19.c
+index 2b90702192ba1..ca3d57abca902 100644
+--- a/src/gcc/testsuite/gcc.target/riscv/predef-19.c
++++ b/src/gcc/testsuite/gcc.target/riscv/predef-19.c
+@@ -1,5 +1,5 @@
+ /* { dg-do compile } */
+-/* { dg-options "-O2 -march=rv64gc_zve32x -mabi=lp64d -mcmodel=medlow -misa-spec=2.2" } */
++/* { dg-options "-O2 -march=rv64im_zve32x -mabi=lp64 -mcmodel=medlow -misa-spec=2.2" } */
+ 
+ int main () {
+ 
+@@ -15,50 +15,30 @@ int main () {
+ #error "__riscv_i"
+ #endif
+ 
+-#if !defined(__riscv_c)
+-#error "__riscv_c"
+-#endif
+-
+ #if defined(__riscv_e)
+ #error "__riscv_e"
+ #endif
+ 
+-#if !defined(__riscv_a)
+-#error "__riscv_a"
+-#endif
+-
+ #if !defined(__riscv_m)
+ #error "__riscv_m"
+ #endif
+ 
+-#if !defined(__riscv_f)
+-#error "__riscv_f"
+-#endif
+-
+-#if !defined(__riscv_d)
+-#error "__riscv_d"
+-#endif
+-
+-#if defined(__riscv_v)
+-#error "__riscv_v"
++#if !defined(__riscv_zicsr)
++#error "__riscv_zicsr"
+ #endif
+ 
+-#if defined(__riscv_zvl128b)
+-#error "__riscv_zvl128b"
++#if !defined(_riscv_zmmul)
++#error "__riscv_zmmul"
+ #endif
+ 
+-#if defined(__riscv_zvl64b)
+-#error "__riscv_zvl64b"
++#if !defined(__riscv_zve32x)
++#error "__riscv_zve32x"
+ #endif
+ 
+ #if !defined(__riscv_zvl32b)
+ #error "__riscv_zvl32b"
+ #endif
+ 
+-#if !defined(__riscv_zve32x)
+-#error "__riscv_zve32x"
+-#endif
+-
+ #if !defined(__riscv_vector)
+ #error "__riscv_vector"
+ #endif
