@@ -1,0 +1,188 @@
+diff --git a/gcc/common/config/riscv/riscv-common.cc b/gcc/common/config/riscv/riscv-common.cc
+index b34409adf39c8..15df22d537704 100644
+--- a/src/gcc/common/config/riscv/riscv-common.cc
++++ b/src/gcc/common/config/riscv/riscv-common.cc
+@@ -218,6 +218,37 @@ static const riscv_implied_info_t riscv_implied_info[] =
+    {
+      return subset_list->xlen () == 32 && subset_list->lookup ("f");
+    }},
++  {"zca", "c",
++   [] (const riscv_subset_list *subset_list) -> bool
++   {
++     /* For RV32 Zca implies C for one of these combinations of
++	extensions: Zca, F_Zca_Zcf and FD_Zca_Zcf_Zcd.  */
++     if (subset_list->xlen () == 32)
++       {
++	 if (subset_list->lookup ("d"))
++	   return subset_list->lookup ("zcf") && subset_list->lookup ("zcd");
++
++	 if (subset_list->lookup ("f"))
++	   return subset_list->lookup ("zcf");
++
++	 return true;
++       }
++
++     /* For RV64 Zca implies C for one of these combinations of
++	extensions: Zca and FD_Zca_Zcd (Zcf is not available
++	for RV64).  */
++     if (subset_list->xlen () == 64)
++       {
++	 if (subset_list->lookup ("d"))
++	   return subset_list->lookup ("zcd");
++
++	 return true;
++       }
++
++     /* Do nothing for future RV128 specification. Behaviour
++	for this case is not yet well defined.  */
++     return false;
++   }},
+ 
+   {"smaia", "ssaia"},
+   {"smstateen", "ssstateen"},
+diff --git a/gcc/testsuite/gcc.target/riscv/arch-25.c b/gcc/testsuite/gcc.target/riscv/arch-25.c
+index 3be4ade65a77f..9201883dfb314 100644
+--- a/src/gcc/testsuite/gcc.target/riscv/arch-25.c
++++ b/src/gcc/testsuite/gcc.target/riscv/arch-25.c
+@@ -2,4 +2,4 @@
+ /* { dg-options "-march=rv64i_zcf -mabi=lp64" } */
+ int foo() {}
+ /* { dg-error "'-march=rv64i_zcf': zcf extension supports in rv32 only" "" { target *-*-* } 0 } */
+-/* { dg-error "'-march=rv64i_zca_zcf': zcf extension supports in rv32 only" "" { target *-*-* } 0 } */
++/* { dg-error "'-march=rv64ic_zca_zcf': zcf extension supports in rv32 only" "" { target *-*-* } 0 } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-1.c b/gcc/testsuite/gcc.target/riscv/attribute-c-1.c
+new file mode 100644
+index 0000000000000..5627e16f6717e
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-1.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv32i_zca -mabi=ilp32" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_c2p0_zca1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-2.c b/gcc/testsuite/gcc.target/riscv/attribute-c-2.c
+new file mode 100644
+index 0000000000000..4c7d5f902e308
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-2.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv32if_zca -mabi=ilp32" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_f2p2_zicsr2p0_zca1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-3.c b/gcc/testsuite/gcc.target/riscv/attribute-c-3.c
+new file mode 100644
+index 0000000000000..7ff68f7749e4f
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-3.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv32if_zca_zcf -mabi=ilp32" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_f2p2_c2p0_zicsr2p0_zca1p0_zcf1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-4.c b/gcc/testsuite/gcc.target/riscv/attribute-c-4.c
+new file mode 100644
+index 0000000000000..ef59b6580e435
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-4.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv32ifd_zca_zcf -mabi=ilp32" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_f2p2_d2p2_zicsr2p0_zca1p0_zcf1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-5.c b/gcc/testsuite/gcc.target/riscv/attribute-c-5.c
+new file mode 100644
+index 0000000000000..14e95516cc59b
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-5.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv32ifd_zca_zcf_zcd -mabi=ilp32" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_f2p2_d2p2_c2p0_zicsr2p0_zca1p0_zcd1p0_zcf1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-6.c b/gcc/testsuite/gcc.target/riscv/attribute-c-6.c
+new file mode 100644
+index 0000000000000..30cda5512a0a8
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-6.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv64i_zca -mabi=lp64" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_c2p0_zca1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-7.c b/gcc/testsuite/gcc.target/riscv/attribute-c-7.c
+new file mode 100644
+index 0000000000000..b06388b0ce337
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-7.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv64ifd_zca -mabi=lp64" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_f2p2_d2p2_zicsr2p0_zca1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-c-8.c b/gcc/testsuite/gcc.target/riscv/attribute-c-8.c
+new file mode 100644
+index 0000000000000..fa760505d44ea
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-c-8.c
+@@ -0,0 +1,6 @@
++/* { dg-do compile } */
++/* { dg-options "-mriscv-attribute -march=rv64ifd_zca_zcd -mabi=lp64" } */
++
++void foo(){}
++
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_f2p2_d2p2_c2p0_zicsr2p0_zca1p0_zcd1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-zce-1.c b/gcc/testsuite/gcc.target/riscv/attribute-zce-1.c
+index e477414d4d5ca..fc86dbe2a0054 100644
+--- a/src/gcc/testsuite/gcc.target/riscv/attribute-zce-1.c
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-zce-1.c
+@@ -3,4 +3,4 @@
+ 
+ void foo(){}
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcmp1p0_zcmt1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_c2p0_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcmp1p0_zcmt1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-zce-2.c b/gcc/testsuite/gcc.target/riscv/attribute-zce-2.c
+index 7008eb5ea1fe3..4504158dab13a 100644
+--- a/src/gcc/testsuite/gcc.target/riscv/attribute-zce-2.c
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-zce-2.c
+@@ -3,4 +3,4 @@
+ 
+ void foo(){}
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_f2p2_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcf1p0_zcmp1p0_zcmt1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv32i2p1_f2p2_c2p0_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcf1p0_zcmp1p0_zcmt1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-zce-3.c b/gcc/testsuite/gcc.target/riscv/attribute-zce-3.c
+index 89ebaaf40639d..4ffc05119e626 100644
+--- a/src/gcc/testsuite/gcc.target/riscv/attribute-zce-3.c
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-zce-3.c
+@@ -3,4 +3,4 @@
+ 
+ void foo(){}
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcmp1p0_zcmt1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_c2p0_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcmp1p0_zcmt1p0\"" } } */
+diff --git a/gcc/testsuite/gcc.target/riscv/attribute-zce-4.c b/gcc/testsuite/gcc.target/riscv/attribute-zce-4.c
+index cacbcaac35f2f..7ee8de2e3083f 100644
+--- a/src/gcc/testsuite/gcc.target/riscv/attribute-zce-4.c
++++ b/src/gcc/testsuite/gcc.target/riscv/attribute-zce-4.c
+@@ -3,4 +3,4 @@
+ 
+ void foo(){}
+ 
+-/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_f2p2_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcmp1p0_zcmt1p0\"" } } */
++/* { dg-final { scan-assembler ".attribute arch, \"rv64i2p1_f2p2_c2p0_zicsr2p0_zca1p0_zcb1p0_zce1p0_zcmp1p0_zcmt1p0\"" } } */
