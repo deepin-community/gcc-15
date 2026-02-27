@@ -888,7 +888,7 @@ ifeq ($(gcn_tools_llvm_version),tools)
   ifneq (,$(filter $(distrelease), bookworm trixie xenial bionic focal jammy noble oracular plucky questing))
     AMDGCN_TOOLS_DEP = amdgcn-tools-19 [$(gcn_archs)],
   else
-    AMDGCN_TOOLS_DEP = amdgcn-tools-21 [$(gcn_archs)],
+    AMDGCN_TOOLS_DEP = amdgcn-tools-19 [$(gcn_archs)],
   endif
 else
   AMDGCN_TOOLS_DEP = llvm-$(gcn_tools_llvm_version)$(if $(pkg_llvm_ver), (>= $(pkg_llvm_ver))) [$(gcn_archs)], \
@@ -1598,6 +1598,10 @@ else ifeq ($(distribution),Ubuntu)
     pie_archs += armhf arm64 i386
   endif
   pie_archs += riscv64
+else ifeq ($(distribution),Deepin)
+  pie_archs = amd64 arm64 i386 loong64 riscv64
+else ifeq ($(distribution),Uos)
+  pie_archs = amd64 arm64 i386 loong64 mips64el riscv64
 endif
 ifneq (,$(filter $(DEB_TARGET_ARCH),$(pie_archs)))
   with_pie := yes
