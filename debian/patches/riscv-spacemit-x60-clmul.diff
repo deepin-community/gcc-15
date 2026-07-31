@@ -1,0 +1,20 @@
+---
+ gcc/config/riscv/spacemit-x60.md | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/gcc/config/riscv/spacemit-x60.md b/gcc/config/riscv/spacemit-x60.md
+index c991f89e5e2..b4a5352ea57 100644
+--- a/src/gcc/config/riscv/spacemit-x60.md
++++ b/src/gcc/config/riscv/spacemit-x60.md
+@@ -93,7 +93,7 @@
+ 	    (eq_attr "mode" "DI")))
+   "spacemit_x60_alu")
+ 
+-(define_insn_reservation "spacemit_x60_clmul" 5
++(define_insn_reservation "spacemit_x60_clmul" 3
+   (and (eq_attr "tune" "spacemit_x60")
+        (eq_attr "type" "clmul"))
+   "spacemit_x60_alu")
+-- 
+2.43.0
+

@@ -1,0 +1,159 @@
+From: Mark Zhuang <mark.zhuang@spacemit.com>
+
+Add the spacemit-x100 processor to -mcpu/-mtune.
+
+Adapted for gcc-15 (doc files riscv-mcpu.texi/riscv-mtune.texi do not
+exist in gcc-15, so doc changes are omitted; riscv_tune_param struct
+does not have use_zero_stride_load, speculative_sched_vsetvl, or
+prefer_agnostic fields).
+
+gcc/ChangeLog:
+
+	* config/riscv/riscv-cores.def (RISCV_TUNE): Add spacemit-x100.
+	(RISCV_CORE): Add spacemit-x100.
+	* config/riscv/riscv.cc (spacemit_x100_tune_info): New.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/mcpu-spacemit-x100.c: New test.
+
+--- a/src/gcc/config/riscv/riscv-cores.def
++++ b/src/gcc/config/riscv/riscv-cores.def
+@@ -43,6 +43,7 @@
+ RISCV_TUNE("thead-c906", generic, thead_c906_tune_info)
+ RISCV_TUNE("xiangshan-nanhu", xiangshan, xiangshan_nanhu_tune_info)
+ RISCV_TUNE("spacemit-x60", spacemit_x60, spacemit_x60_tune_info)
++RISCV_TUNE("spacemit-x100", generic_ooo, spacemit_x100_tune_info)
+ RISCV_TUNE("generic-ooo", generic_ooo, generic_ooo_tune_info)
+ RISCV_TUNE("size", generic, optimize_size_tune_info)
+ 
+@@ -108,4 +109,8 @@
+ RISCV_CORE("spacemit-x60",    "rv64imafdcv_zba_zbb_zbc_zbs_zicboz_zicond_"
+ 			      "zbkc_zfh_zvfh_zvkt_zvl256b_sscofpmf_xsmtvdot",
+ 			      "spacemit-x60")
++RISCV_CORE("spacemit-x100",   "rva23s64_smepmp_smnpm_smstateen_sspm_zbc_zbkc_"
++			      "zfbfmin_zfh_zvbc_zvfbfwma_zvfh_zvknc_zvkng_zvknha_"
++			      "zvksc_zvksg_zvl256b_xsmtvdot",
++			      "spacemit-x100")
+ #undef RISCV_CORE
+--- a/src/gcc/config/riscv/riscv.cc
++++ b/src/gcc/config/riscv/riscv.cc
+@@ -663,6 +663,28 @@
+   NULL,						/* loop_align */
+ };
+ 
++/* Costs to use when optimizing for Spacemit x100.  */
++static const struct riscv_tune_param spacemit_x100_tune_info = {
++  {COSTS_N_INSNS (3), COSTS_N_INSNS (3)},	/* fp_add */
++  {COSTS_N_INSNS (4), COSTS_N_INSNS (4)},	/* fp_mul */
++  {COSTS_N_INSNS (12), COSTS_N_INSNS (20)},	/* fp_div */
++  {COSTS_N_INSNS (2), COSTS_N_INSNS (3)},	/* int_mul */
++  {COSTS_N_INSNS (14), COSTS_N_INSNS (22)},	/* int_div */
++  4,						/* issue_rate */
++  3,						/* branch_cost */
++  3,						/* memory_cost */
++  3,						/* fmv_cost */
++  false,					/* slow_unaligned_access */
++  true,						/* vector_unaligned_access */
++  false,					/* use_divmod_expansion */
++  true,						/* overlap_op_by_pieces */
++  RISCV_FUSE_NOTHING,				/* fusible_ops */
++  &generic_vector_cost,			/* vector cost */
++  NULL,						/* function_align */
++  NULL,						/* jump_align */
++  NULL,						/* loop_align */
++};
++
+ static bool riscv_avoid_shrink_wrapping_separate ();
+ static tree riscv_handle_fndecl_attribute (tree *, tree, tree, int, bool *);
+ static tree riscv_handle_type_attribute (tree *, tree, tree, int, bool *);
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/mcpu-spacemit-x100.c
+@@ -0,0 +1,87 @@
++/* { dg-do compile } */
++/* { dg-skip-if "-march given" { *-*-* } { "-march=*" } } */
++/* { dg-options "-mcpu=spacemit-x100" { target { rv64 } } } */
++/* Spacemit X100 => rva23s64_smepmp_smnpm_smstateen_sspm_zbc_zbkc_
++ * zfbfmin_zfh_zvbc_zvfbfwma_zvfh_zvknc_zvkng_zvknha_zvksc_zvksg_
++ * zvl256b_xsmtvdot
++ */
++
++#if !((__riscv_xlen == 64)		\
++      && !defined(__riscv_32e)		\
++      && defined(__riscv_mul)		\
++      && defined(__riscv_atomic)	\
++      && (__riscv_flen == 64)		\
++      && defined(__riscv_compressed)	\
++      && defined(__riscv_v)		\
++      && defined(__riscv_h)		\
++      && defined(__riscv_zic64b)	\
++      && defined(__riscv_zba)		\
++      && defined(__riscv_zbb)		\
++      && defined(__riscv_zbc)		\
++      && defined(__riscv_zbs)		\
++      && defined(__riscv_zfh)		\
++      && defined(__riscv_zfhmin)	\
++      && defined(__riscv_ziccamoa)	\
++      && defined(__riscv_ziccif)	\
++      && defined(__riscv_zicclsm)	\
++      && defined(__riscv_ziccrse)	\
++      && defined(__riscv_zicsr)		\
++      && defined(__riscv_zifencei)	\
++      && defined(__riscv_zihintntl)	\
++      && defined(__riscv_svpbmt)	\
++      && defined(__riscv_smepmp)	\
++      && defined(__riscv_sstc)		\
++      && defined(__riscv_sscofpmf)	\
++      && defined(__riscv_zicond)	\
++      && defined(__riscv_zicboz)	\
++      && defined(__riscv_zicbom)	\
++      && defined(__riscv_zicbop)	\
++      && defined(__riscv_zicntr)	\
++      && defined(__riscv_zihpm)		\
++      && defined(__riscv_za64rs)	\
++      && defined(__riscv_zkt)		\
++      && defined(__riscv_svinval)	\
++      && defined(__riscv_svnapot)	\
++      && defined(__riscv_zihintpause)	\
++      && defined(__riscv_zbkc)		\
++      && defined(__riscv_zvfh)		\
++      && defined(__riscv_zvfhmin)	\
++      && defined(__riscv_zvl256b)	\
++      && defined(__riscv_zfa)		\
++      && defined(__riscv_zca)		\
++      && defined(__riscv_zcb)		\
++      && defined(__riscv_zcd)		\
++      && defined(__riscv_zvbb)		\
++      && defined(__riscv_zvkng)		\
++      && defined(__riscv_zvknha)	\
++      && defined(__riscv_smstateen)	\
++      && defined(__riscv_ssstateen)	\
++      && defined(__riscv_zfbfmin)	\
++      && defined(__riscv_zvfbfmin)	\
++      && defined(__riscv_zvfbfwma)	\
++      && defined(__riscv_zimop)		\
++      && defined(__riscv_zcmop)		\
++      && defined(__riscv_smnpm)		\
++      && defined(__riscv_ssnpm)		\
++      && defined(__riscv_sspm)		\
++      && defined(__riscv_zawrs)		\
++      && defined(__riscv_zvknc)		\
++      && defined(__riscv_zvksc)		\
++      && defined(__riscv_zvksg)		\
++      && defined(__riscv_supm)		\
++      && defined(__riscv_svbare)	\
++      && defined(__riscv_svade)		\
++      && defined(__riscv_ssccptr)	\
++      && defined(__riscv_sstvecd)	\
++      && defined(__riscv_sstvala)	\
++      && defined(__riscv_sscounterenw)	\
++      && defined(__riscv_ssu64xl)	\
++      && defined(__riscv_sha)		\
++      && defined(__riscv_xsmtvdot))
++#error "unexpected arch"
++#endif
++
++int main()
++{
++  return 0;
++}

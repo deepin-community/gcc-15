@@ -1,0 +1,92 @@
+From: Mark Zhuang <mark.zhuang@spacemit.com>
+
+Add xsmtvdot extension support and add it to the spacemit-x60 core.
+
+Adapted for gcc-15 which uses riscv-common.cc / riscv.opt instead of the
+gcc-16 riscv-ext.def / riscv-ext.opt framework.
+
+gcc/ChangeLog:
+
+	* common/config/riscv/riscv-common.cc (riscv_implied_info): Add
+	xsmtvdot -> zve32x implication.
+	(riscv_ext_version_table): Add xsmtvdot.
+	(riscv_ext_flag_table): Add xsmtvdot flag entry.
+	* config/riscv/riscv.opt: Add riscv_xsmt_subext TargetVariable and
+	XSMTVDOT mask.
+	* config/riscv/riscv-cores.def: Add xsmtvdot to spacemit-x60 arch
+	string.
+
+gcc/testsuite/ChangeLog:
+
+	* gcc.target/riscv/predef-smt-1.c: New test.
+
+--- a/src/gcc/common/config/riscv/riscv-common.cc
++++ b/src/gcc/common/config/riscv/riscv-common.cc
+@@ -263,6 +263,8 @@
+   {"smnpm", "zicsr"},
+   {"smmpm", "zicsr"},
+ 
++  {"xsmtvdot", "zve32x"},
++
+   {"xsfvcp", "zve32x"},
+ 
+   {NULL, NULL}
+@@ -490,6 +492,8 @@
+   {"xsfvqmaccdod",    ISA_SPEC_CLASS_NONE, 1, 0},
+   {"xsfvfnrclipxfqf", ISA_SPEC_CLASS_NONE, 1, 0},
+ 
++  {"xsmtvdot", ISA_SPEC_CLASS_NONE, 1, 0},
++
+   /* Terminate the list.  */
+   {NULL, ISA_SPEC_CLASS_NONE, 0, 0}
+ };
+@@ -1957,6 +1961,8 @@
+   RISCV_EXT_FLAG_ENTRY ("xsfvqmaccdod",    x_riscv_sifive_subext, MASK_XSFVQMACCDOD),
+   RISCV_EXT_FLAG_ENTRY ("xsfvfnrclipxfqf", x_riscv_sifive_subext, MASK_XSFVFNRCLIPXFQF),
+ 
++  RISCV_EXT_FLAG_ENTRY ("xsmtvdot", x_riscv_xsmt_subext, MASK_XSMTVDOT),
++
+   {NULL, NULL, NULL, 0}
+ };
+ 
+--- a/src/gcc/config/riscv/riscv.opt
++++ b/src/gcc/config/riscv/riscv.opt
+@@ -555,6 +555,11 @@
+ Mask(XSFVFNRCLIPXFQF) Var(riscv_sifive_subext)
+ 
+ TargetVariable
++int riscv_xsmt_subext
++
++Mask(XSMTVDOT) Var(riscv_xsmt_subext)
++
++TargetVariable
+ int riscv_fmv_priority = 0
+ 
+ Enum
+--- a/src/gcc/config/riscv/riscv-cores.def
++++ b/src/gcc/config/riscv/riscv-cores.def
+@@ -107,6 +107,6 @@
+ 			      "xiangshan-nanhu")
+ 
+ RISCV_CORE("spacemit-x60",    "rv64imafdcv_zba_zbb_zbc_zbs_zicboz_zicond_"
+-			      "zbkc_zfh_zvfh_zvkt_zvl256b_sscofpmf",
++			      "zbkc_zfh_zvfh_zvkt_zvl256b_sscofpmf_xsmtvdot",
+ 			      "spacemit-x60")
+ #undef RISCV_CORE
+--- /dev/null
++++ b/src/gcc/testsuite/gcc.target/riscv/predef-smt-1.c
+@@ -0,0 +1,14 @@
++/* { dg-do compile } */
++/* { dg-options "-march=rv64g_xsmtvdot -mabi=lp64" } */
++
++int main () {
++#if !defined(__riscv)
++#error "__riscv"
++#endif
++
++#if !defined(__riscv_xsmtvdot)
++#error "__riscv_xsmtvdot"
++#endif
++
++  return 0;
++}

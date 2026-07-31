@@ -1,3 +1,9 @@
+gcc-15 (15.2.0-14deepin3) unstable; urgency=medium
+
+  * backport spacemit k1/k3 support
+
+ -- Chang Yang <yangchang@deepin.org>  Fri, 31 Jul 2026 15:11:08 +0800
+
 gcc-15 (15.2.0-14deepin2) unstable; urgency=medium
 
   * set rva23 baseline

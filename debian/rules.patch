@@ -83,6 +83,14 @@ debian_patches += \
 	riscv-rva23s \
 	riscv-rva23-update
 
+# riscv spacemit processor support
+debian_patches += \
+	riscv-spacemit-x60-basic \
+	riscv-spacemit-xsmtvdot \
+	riscv-spacemit-x60-vectune \
+	riscv-spacemit-x100 \
+	riscv-spacemit-a100
+
 # see https://bugs.debian.org/1108322
 ifneq (,$(filter $(DEB_TARGET_ARCH),hppa m68k powerpc))
   debian_patches += ada-tv_nsec-size

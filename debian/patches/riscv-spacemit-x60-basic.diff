@@ -1,0 +1,284 @@
+	* config/riscv/riscv-cores.def: Add RISCV_TUNE and RISCV_CORE entries
+	for the spacemit-x60 design.
+	* config/riscv/riscv-opts.h (riscv_microarchitecture_type): Add entry
+	for spacemit-x60 design.
+	* config/riscv/riscv.cc (spacemit_x60_tune_info): New tune structure
+	for the spacemit-x60 design.
+	* config/riscv/riscv.md (tune): Add spacemit_x60.
+	Include spacemit-x60.md.
+	* config/riscv/spacemit-x60.md: New file
+
+Adapted for gcc-15: the riscv_tune_param struct does not have
+use_zero_stride_load, speculative_sched_vsetvl, or prefer_agnostic
+fields, so those are omitted. The sf_vc and sf_vc_se type attributes
+do not exist in gcc-15, so they are omitted from the dummy reservation.
+
+--- a/src/gcc/config/riscv/riscv-cores.def
++++ b/src/gcc/config/riscv/riscv-cores.def
+@@ -42,6 +42,7 @@
+ RISCV_TUNE("tt-ascalon-d8", generic_ooo, tt_ascalon_d8_tune_info)
+ RISCV_TUNE("thead-c906", generic, thead_c906_tune_info)
+ RISCV_TUNE("xiangshan-nanhu", xiangshan, xiangshan_nanhu_tune_info)
++RISCV_TUNE("spacemit-x60", spacemit_x60, spacemit_x60_tune_info)
+ RISCV_TUNE("generic-ooo", generic_ooo, generic_ooo_tune_info)
+ RISCV_TUNE("size", generic, optimize_size_tune_info)
+ 
+@@ -104,4 +105,7 @@
+ 			      "zbkb_zbkc_zbkx_zknd_zkne_zknh_zksed_zksh_"
+ 			      "svinval_zicbom_zicboz",
+ 			      "xiangshan-nanhu")
++RISCV_CORE("spacemit-x60",    "rv64imafdcv_zba_zbb_zbc_zbs_zicboz_zicond_"
++			      "zbkc_zfh_zvfh_zvkt_zvl256b_sscofpmf",
++			      "spacemit-x60")
+ #undef RISCV_CORE
+--- a/src/gcc/config/riscv/riscv-opts.h
++++ b/src/gcc/config/riscv/riscv-opts.h
+@@ -58,7 +58,8 @@
+   sifive_p400,
+   sifive_p600,
+   xiangshan,
+-  generic_ooo
++  generic_ooo,
++  spacemit_x60,
+ };
+ extern enum riscv_microarchitecture_type riscv_microarchitecture;
+ 
+--- a/src/gcc/config/riscv/riscv.cc
++++ b/src/gcc/config/riscv/riscv.cc
+@@ -642,6 +642,27 @@
+   NULL,						/* loop_align */
+ };
+ 
++static const struct riscv_tune_param spacemit_x60_tune_info= {
++  {COSTS_N_INSNS (4), COSTS_N_INSNS (5)},	/* fp_add */
++  {COSTS_N_INSNS (4), COSTS_N_INSNS (5)},	/* fp_mul */
++  {COSTS_N_INSNS (15), COSTS_N_INSNS (22)},	/* fp_div */
++  {COSTS_N_INSNS (3), COSTS_N_INSNS (6)},	/* int_mul */
++  {COSTS_N_INSNS (12), COSTS_N_INSNS (20)},	/* int_div */
++  2,						/* issue_rate */
++  3,						/* branch_cost */
++  5,						/* memory_cost */
++  6,						/* fmv_cost */
++  false,					/* slow_unaligned_access */
++  false,					/* vector_unaligned_access */
++  false,					/* use_divmod_expansion */
++  false,					/* overlap_op_by_pieces */
++  RISCV_FUSE_NOTHING,				/* fusible_ops */
++  NULL,						/* vector cost */
++  NULL,						/* function_align */
++  NULL,						/* jump_align */
++  NULL,						/* loop_align */
++};
++
+ static bool riscv_avoid_shrink_wrapping_separate ();
+ static tree riscv_handle_fndecl_attribute (tree *, tree, tree, int, bool *);
+ static tree riscv_handle_type_attribute (tree *, tree, tree, int, bool *);
+--- a/src/gcc/config/riscv/riscv.md
++++ b/src/gcc/config/riscv/riscv.md
+@@ -669,7 +669,7 @@
+ ;; Microarchitectures we know how to tune for.
+ ;; Keep this in sync with enum riscv_microarchitecture.
+ (define_attr "tune"
+-  "generic,sifive_7,sifive_p400,sifive_p600,xiangshan,generic_ooo"
++  "generic,sifive_7,sifive_p400,sifive_p600,xiangshan,generic_ooo,spacemit_x60"
+   (const (symbol_ref "((enum attr_tune) riscv_microarchitecture)")))
+ 
+ ;; Describe a user's asm statement.
+@@ -4850,3 +4850,4 @@
+ (include "zc.md")
+ (include "corev.md")
+ (include "xiangshan.md")
++(include "spacemit-x60.md")
+--- a/src/gcc/config/riscv/spacemit-x60.md
++++ b/src/gcc/config/riscv/spacemit-x60.md
+@@ -0,0 +1,189 @@
++;; spacemit_x60 DFA-based pipeline description for RISC-V targets.
++;; Copyright (C) 2011-2026 Free Software Foundation, Inc.
++;; Contributed by Andrew Waterman (andrew@sifive.com).
++;; Based on MIPS target for GNU compiler.
++
++;; This file is part of GCC.
++
++;; GCC is free software; you can redistribute it and/or modify it
++;; under the terms of the GNU General Public License as published
++;; by the Free Software Foundation; either version 3, or (at your
++;; option) any later version.
++
++;; GCC is distributed in the hope that it will be useful, but WITHOUT
++;; ANY WARRANTY; without even the implied warranty of MERCHANTABILITY
++;; or FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public
++;; License for more details.
++
++;; You should have received a copy of the GNU General Public License
++;; along with GCC; see the file COPYING3.  If not see
++;; <http://www.gnu.org/licenses/>.
++
++;; ----------------------------------------------------
++;; Spacemit-x60 Units
++;; 2*alu + 2*lsu + 1*fpalu + 1*fdivsqrt + 1*vxu
++;;
++;; There's actually two VXU units and ops get split across them
++;; to give the illusion of a single wider unit with higher 
++;; performance.  There are a few ops that can only be fed into
++;; one of the two units.  Probably best to initially model as
++;; a single unit
++;;
++;; The VXU is not currently modeled.
++;; Some ops like shadd.uw and add.uw, cpop take an extra cycle
++;; Given everything is in-order, anti-dependencies probably matter
++;; FP sign injection isn't handled correctly
++;; ----------------------------------------------------
++
++(define_automaton "spacemit_x60")
++(define_cpu_unit "spacemit_x60_alu0,spacemit_x60_alu1" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_lsu0,spacemit_x60_lsu1" "spacemit_x60")
++;;(define_cpu_unit "spacemit_x60_vxu0" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_fpalu" "spacemit_x60")
++(define_cpu_unit "spacemit_x60_fdivsqrt" "spacemit_x60")
++
++(define_reservation "spacemit_x60_lsu" "spacemit_x60_lsu0, spacemit_x60_lsu1")
++(define_reservation "spacemit_x60_alu" "spacemit_x60_alu0, spacemit_x60_alu1")
++
++;; ----------------------------------------------------
++;; Memory (load/store)
++;; ----------------------------------------------------
++
++(define_insn_reservation "spacemit_x60_load" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "load,fpload,atomic"))
++  "spacemit_x60_lsu")
++
++(define_insn_reservation "spacemit_x60_store" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "store,fpstore"))
++  "spacemit_x60_lsu")
++
++;; ----------------------------------------------------
++;; Int
++;; ----------------------------------------------------
++
++;; alu0 handles div/rem and jumps
++(define_insn_reservation "spacemit_x60_jump" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "branch,jump,call,jalr,ret,trap,sfb_alu"))
++  "spacemit_x60_alu0")
++
++(define_insn_reservation "spacemit_x60_idivsi" 7
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "idiv")
++	    (eq_attr "mode" "SI")))
++  "spacemit_x60_alu0*7")
++
++(define_insn_reservation "spacemit_x60_idivdi" 7
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "idiv")
++	    (eq_attr "mode" "DI")))
++  "spacemit_x60_alu0*7")
++
++(define_insn_reservation "spacemit_x60_imulsi" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "imul")
++	    (eq_attr "mode" "SI")))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_imuldi" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "imul")
++	    (eq_attr "mode" "DI")))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_clmul" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "clmul"))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_mtc_mfc" 3
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "mtc,mfc"))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_fcvt_i2f" 4
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcvt_i2f"))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_fcvt_f2i" 6
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcvt_f2i"))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_alu" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "unknown,const,arith,shift,slt,multi,auipc,nop,logical,\
++			move,bitmanip,min,max,minu,maxu,clz,ctz,rotate,\
++			condmove,crypto,mvpair,zicond,cpop"))
++  "spacemit_x60_alu")
++
++(define_insn_reservation "spacemit_x60_alu2c" 2
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "cpop"))
++  "spacemit_x60_alu")
++
++;; ----------------------------------------------------
++;; Float
++;; ----------------------------------------------------
++
++(define_insn_reservation "spacemit_x60_fcvt" 4
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcvt,fmove"))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fcmp" 6
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "fcmp"))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmul_half_single" 4
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fadd,fmul")
++       (ior (eq_attr "mode" "HF")
++	    (eq_attr "mode" "SF"))))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmadd_half_single" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fmadd")
++       (ior (eq_attr "mode" "HF")
++	    (eq_attr "mode" "SF"))))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmul_double" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fadd,fmul")
++	    (eq_attr "mode" "DF")))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fmadd_double" 5
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fmadd")
++	    (eq_attr "mode" "DF")))
++  "spacemit_x60_fpalu")
++
++(define_insn_reservation "spacemit_x60_fdiv_half" 7
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fdiv,fsqrt")
++	    (eq_attr "mode" "HF")))
++  "spacemit_x60_fdivsqrt*7")
++
++(define_insn_reservation "spacemit_x60_fdiv_single" 7
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fdiv,fsqrt")
++	    (eq_attr "mode" "SF")))
++  "spacemit_x60_fdivsqrt*7")
++
++(define_insn_reservation "spacemit_x60_fdiv_double" 7
++  (and (eq_attr "tune" "spacemit_x60")
++       (and (eq_attr "type" "fdiv,fsqrt")
++	    (eq_attr "mode" "DF")))
++  "spacemit_x60_fdivsqrt*7")
++
++(define_insn_reservation "spacemi6_x60_dummy" 1
++  (and (eq_attr "tune" "spacemit_x60")
++       (eq_attr "type" "viminmax,vfmuladd,vfmovvf,vssegte,vlsegds,rdvlenb,vaesef,vfcmp,vmpop,vwsll,vsha2cl,vfwcvtbf16,vfncvtftoi,vgather,vsha2ch,vsts,vldm,vmsfs,vfmul,vcompress,vaesz,vssegtox,vstox,vclmulh,vghsh,vaalu,vslideup,vfalu,vaeskf1,vfcvtitof,vaesdm,vmffs,vandn,vstm,vgmul,vlds,viwmul,vfmerge,vlsegdff,vshift,vaesem,vaesdf,vste,ghost,viwred,vsalu,vfwredu,vmidx,sf_vfnrclip,vstux,vfslide1down,vfcvtftoi,vfncvtitof,vnshift,vsm3me,vired,vlde,vfwalu,vlsegdux,vicmp,vfncvtftof,vror,vfwmaccbf16,vfminmax,vldff,vstr,vsm3c,vfwcvtftoi,vbrev,vaeskf2,vidiv,vfwcvtftof,rdvl,vimul,vfsgnj,vimovvx,vsha2ms,vialu,vfredo,vctz,vlsegde,viwmuladd,vcpop,vsetvl,vldux,vfwmuladd,vector,wrvxrm,vsshift,vfredu,vimerge,vlsegdox,vfrecp,vnclip,vfclass,vbrev8,vslidedown,vldox,vmalu,vext,vimuladd,sf_vqmacc,vldr,vrol,vmov,vsmul,vclmul,vfmov,vislide1up,vssegtux,vclz,rdfrm,vfwcvtitof,vfncvtbf16,vfmovfv,vislide1down,vfwmul,vfsqrt,vrev8,vicalu,vimov,wrfrm,vfdiv,vsm4k,vmiota,vsm4r,viwalu,vsetvl_pre,vimovxv,vfwredo,vfslide1up,vssegts"))
++  "nothing")
++
